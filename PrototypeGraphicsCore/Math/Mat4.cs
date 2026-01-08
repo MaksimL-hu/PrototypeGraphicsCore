@@ -339,7 +339,6 @@ namespace MyMath
         }
 
         // ----- Transpose / Invert (OpenTK-like) -----
-
         public static Mat4 Transpose(Mat4 m)
         {
             Mat4 r = new();
@@ -442,7 +441,6 @@ namespace MyMath
         }
 
         // ----- Equality -----
-
         public static bool operator ==(Mat4 a, Mat4 b)
         {
             return a.M00 == b.M00 && a.M10 == b.M10 && a.M20 == b.M20 && a.M30 == b.M30 &&
@@ -452,9 +450,9 @@ namespace MyMath
         }
 
         public static bool operator !=(Mat4 a, Mat4 b) => !(a == b);
-
         public bool Equals(Mat4 other) => this == other;
         public override bool Equals(object? obj) => obj is Mat4 other && Equals(other);
+
         public override int GetHashCode()
         {
             int h0 = HashCode.Combine(M00, M10, M20, M30);
@@ -467,7 +465,7 @@ namespace MyMath
         public override string ToString()
             => $"[{Row0} | {Row1} | {Row2} | {Row3}]";
 
-        /// <summary>Column-major float[16] for glUniformMatrix4fv with transpose=false.</summary>
+        // Column-major float[16] for glUniformMatrix4fv with transpose=false.
         public void ToColumnMajorArray(float[] dst16)
         {
             if (dst16 is null || dst16.Length < 16) throw new ArgumentException("dst16 must have length >= 16");

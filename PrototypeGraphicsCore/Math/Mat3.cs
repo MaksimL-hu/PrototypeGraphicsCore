@@ -146,7 +146,6 @@ namespace MyMath
         public static Mat3 operator *(float s, Mat3 m) => m * s;
 
         // --- Basic constructors ---
-
         public static Mat3 CreateScale(float s)
         {
             var m = Identity;
@@ -315,7 +314,7 @@ namespace MyMath
                $"{this[1, 0]:0.###} {this[1, 1]:0.###} {this[1, 2]:0.###}; " +
                $"{this[2, 0]:0.###} {this[2, 1]:0.###} {this[2, 2]:0.###}]";
 
-        /// <summary>Column-major float[9] for glUniformMatrix3fv with transpose=false.</summary>
+        // Column-major float[9] for glUniformMatrix3fv with transpose=false
         public void ToColumnMajorArray(float[] dst9)
         {
             if (dst9 is null || dst9.Length < 9) throw new ArgumentException("dst9 must have length >= 9");

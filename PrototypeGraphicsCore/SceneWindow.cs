@@ -197,7 +197,6 @@ namespace PrototypeGraphicsCore
                 _cameraPos -= _worldUp * speed;
         }
 
-
         protected override void OnMouseMove(MouseMoveEventArgs e)
         {
             base.OnMouseMove(e);
@@ -388,13 +387,6 @@ namespace PrototypeGraphicsCore
             _glowShader?.Dispose();
         }
 
-        private float ReadDepth01(int x, int y)
-        {
-            _depth1[0] = 1.0f;
-            GL.ReadPixels(x, y, 1, 1, PixelFormat.DepthComponent, PixelType.Float, _depth1);
-            return _depth1[0];
-        }
-
         private void DrawGlow(in Mat4 view)
         {
             // --- 1) Project light to screen ---
@@ -505,6 +497,5 @@ namespace PrototypeGraphicsCore
 
             return vis * 0.2f; // /5
         }
-
     }
 }

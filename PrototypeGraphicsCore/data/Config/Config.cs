@@ -121,7 +121,7 @@ namespace Config
         public static readonly Vec3[] ObjectSpinAxis = { Vec3.UnitY, Vec3.UnitY, Vec3.UnitY, Vec3.UnitX };
         public static readonly float[] ObjectSpinSpeed = { 1.0f, 0.0f, 0.8f, 1.6f };
 
-        // Shaders root (относительно рабочей папки)
+        // Shaders root
         public const string ShadersDir = "data/shaders";
 
         // Shader files
