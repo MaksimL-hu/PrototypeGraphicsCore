@@ -23,9 +23,8 @@ namespace PrototypeGraphicsCore
         private Mesh _torus = null!;
 
         private Mat4 _projection;
-
         private float _time;
-        private float[] _depthBlock = Array.Empty<float>();
+        private float[] _depthBlock = [];
 
         // Light in center
         private float _lampHaloRadius = AppConfig.LampHaloRadius;  // объёмный halo
@@ -53,6 +52,11 @@ namespace PrototypeGraphicsCore
         private float _moveSpeed = AppConfig.MoveSpeed;
         private float _mouseSensitivity = AppConfig.MouseSensitivity;
         private float _fov = AppConfig.FovDeg;
+
+        //fps counter
+        private double _fpsTime;
+        private int _fpsFrames;
+        private double _fpsValue;
 
         public SceneWindow(GameWindowSettings gws, NativeWindowSettings nws) : base(gws, nws) { }
 
@@ -304,6 +308,24 @@ namespace PrototypeGraphicsCore
             DrawGlow(view);
 
             SwapBuffers();
+
+            ShowFPS(args);
+        }
+
+        private void ShowFPS(FrameEventArgs args)
+        {
+            _fpsTime += args.Time;
+            _fpsFrames++;
+
+            if (_fpsTime >= 0.5) // обновлять 2 раза в секунду
+            {
+                _fpsValue = _fpsFrames / _fpsTime;
+
+                Title = $"{AppConfig.Title} | FPS: {_fpsValue:0.0}";
+
+                _fpsTime = 0.0;
+                _fpsFrames = 0;
+            }
         }
 
         private void UpdateCameraVectors()

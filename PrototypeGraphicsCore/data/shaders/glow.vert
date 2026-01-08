@@ -4,7 +4,6 @@ out vec2 vUV;
 
 void main()
 {
-    // Fullscreen triangle: (-1,-1), (3,-1), (-1,3)
     vec2 pos;
     if (gl_VertexID == 0) pos = vec2(-1.0, -1.0);
     else if (gl_VertexID == 1) pos = vec2( 3.0, -1.0);
