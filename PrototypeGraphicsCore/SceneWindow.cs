@@ -37,7 +37,7 @@ namespace PrototypeGraphicsCore
         // Glow
         private int _glowVao;
         private float _glowRadiusPx = AppConfig.GlowBaseRadiusPx;            // радиус ореола в пикселях
-        private Vec3 _glowColor = AppConfig.GlowColor; // цвет (мы ещё дополнительно приглушим)
+        private Vec3 _glowColor = AppConfig.GlowColor;
         private Shader _glowShader = null!;
 
         // FPS camera
