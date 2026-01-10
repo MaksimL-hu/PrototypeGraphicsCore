@@ -11,9 +11,11 @@ namespace MyMath
 
         public static readonly Quat Identity = new(0, 0, 0, 1);
 
+        public float Length => MathF.Sqrt(X * X + Y * Y + Z * Z + W * W);
+
         public Quat Normalized()
         {
-            float len = MathF.Sqrt(X * X + Y * Y + Z * Z + W * W);
+            float len = Length;
             return len > 1e-8f ? new Quat(X / len, Y / len, Z / len, W / len) : Identity;
         }
 
