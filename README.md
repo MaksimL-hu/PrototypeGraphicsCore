@@ -1,13 +1,12 @@
 # PrototypeGraphicsCore
 
-Учебный 3D-проект на **C# + OpenTK (OpenGL 3.3)**: примитивы (**cube / sphere / pyramid / torus**) вокруг источника света, **Phong**-освещение, видимая “лампа” и **glow**, управление камерой как в FPS.  
-Математика сцены — своя (**MyMath**), без `OpenTK.Mathematics`.
+A 3D learning project in **C# + OpenTK (OpenGL 3.3)**: primitives (**cube / sphere / pyramid / torus**) around a light source, **Phong** lighting, a visible “lamp” and **glow**, and camera controls like in FPS. 
+The scene’s math is custom (**MyMath**), with self-written mathematics for 3D graphics.
 
 <p align="center">
   <img src="docs/screenshot.png" alt="Screenshot" width="800" />
 </p>
 
-<!-- Бейджи (по желанию) -->
 <p align="center">
   <img alt="OpenGL" src="https://img.shields.io/badge/OpenGL-3.3-blue">
   <img alt="GLSL" src="https://img.shields.io/badge/GLSL-330-blueviolet">
@@ -18,15 +17,15 @@
 
 ## Features
 
-- ✅ OpenGL 3.3 + GLSL 330  
-- ✅ Примитивы: cube, sphere, pyramid, torus  
-- ✅ Объекты расположены **по окружности** вокруг источника света  
-- ✅ **Phong** (ambient + diffuse + specular)  
-- ✅ Видимый источник света (сфера-лампа) + **ореол (glow)**  
-- ✅ FPS-подобная камера: WASD + мышь + зум колесом  
-- ✅ Шейдеры вынесены в файлы (`data/shaders/*`)  
-- ✅ Конфиг параметров в `Config/AppConfig`  
-- ✅ Константы имён uniform’ов (чтобы не писать `"uView"` руками)
+- OpenGL 3.3 + GLSL 330 
+- Primitives: cube, sphere, pyramid, torus 
+- Objects are arranged **in a circle** around the light source 
+- **Phong** (ambient + diffuse + specular) 
+- Visible light source (sphere-lamp) + **halo (glow)** 
+- FPS-like camera: WASD + mouse + zoom with the wheel 
+- Shaders are placed in files (`data/shaders/*`) 
+- Config parameters in `Config/AppConfig` 
+- Uniform names constants (to avoid writing `"uView"` by hand)
 
 ---
 
@@ -44,17 +43,17 @@
 
 ## Requirements
 
-- GPU/драйвер с поддержкой **OpenGL 3.3**
-- **.NET SDK** (см. `TargetFramework` в `.csproj`)
+- GPU/driver with support for **OpenGL 3.3**
+- **.NET SDK** (see `TargetFramework` in `.csproj`)
 - Windows / Linux / macOS
 
 ---
 
-## Build & Run
+## Build and run
 
 ### Visual Studio
-1. Открой solution
-2. Выбери проект `PrototypeGraphicsCore`
+1. New Solution
+2. Select the "PrototypeGraphicsCore" project
 3. Run
 
 ### CLI
