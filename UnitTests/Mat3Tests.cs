@@ -3,7 +3,7 @@ using static PrototypeGraphicsCore.UnitTests.TestUtil;
 
 namespace PrototypeGraphicsCore.UnitTests;
 
-public class Mat3AdvancedTests
+public class Mat3Tests
 {
     private static Mat3 MakeNonSingular()
     {

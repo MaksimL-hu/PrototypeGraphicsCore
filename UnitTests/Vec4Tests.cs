@@ -16,10 +16,41 @@ public class Vec4Tests
     }
 
     [Fact]
+    public void PlusWork()
+    {
+        var v1 = new Vec4(1, 1, 1, 1);
+        var v2 = new Vec4(1, 1, 1, 1);
+        Near(new Vec4(2, 2, 2, 2), v1 + v2, 0);
+    }
+
+    [Fact]
+    public void MinusWork()
+    {
+        var v1 = new Vec4(2, 2, 2, 2);
+        var v2 = new Vec4(1, 1, 1, 1);
+        Near(new Vec4(1, 1, 1, 1), v1 - v2, 0);
+    }
+
+    [Fact]
+    public void MultiplyWork()
+    {
+        var v = new Vec4(2, 2, 2, 2);
+        Near(new Vec4(4, 4, 4, 4), v * 2, 0);
+    }
+
+    [Fact]
+    public void LerpWork()
+    {
+        var v1 = Vec4.Zero;
+        var v2 = new Vec4(2,2,2,2);
+        Near(Vec4.One, Vec4.Lerp(v1, v2, 0.5f), 0);
+    }
+
+    [Fact]
     public void DivideWork()
     {
         var v = new Vec4(2, 4, 6, 8);
-        Near(new Vec4(1, 2, 3, 4), v / 2);
+        Near(new Vec4(1, 2, 3, 4), v / 2, 0);
     }
 
     [Fact]
