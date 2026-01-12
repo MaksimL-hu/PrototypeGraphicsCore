@@ -14,7 +14,7 @@ namespace PrototypeGraphicsCore
     public sealed class SceneWindow : GameWindow
     {
         private readonly List<SceneObject> _objects = new();
-        private readonly float[] _depth1 = new float[1];
+        private float[] _depthBlock = [];
 
         private Shader _shader = null!;
         private Mesh _cube = null!;
@@ -24,20 +24,20 @@ namespace PrototypeGraphicsCore
 
         private Mat4 _projection;
         private float _time;
-        private float[] _depthBlock = [];
 
-        // Light in center
-        private float _lampHaloRadius = AppConfig.LampHaloRadius;  // объёмный halo
+        // --- Two lights ---
+        private Vec3 _lightPos0;
+        private Vec3 _lightPos1;
+
+        // Lamp rendering (same mesh/shader for both)
+        private float _lampHaloRadius = AppConfig.LampHaloRadius;
         private float _lampCoreRadius = AppConfig.LampCoreRadius;
-        private Vec3 _lightPos = AppConfig.LightPos;
-        private Vec3 _lampCoreColor = AppConfig.LampCoreColor;
         private Shader _lampShader = null!;
         private Mesh _lampMesh = null!;
 
-        // Glow
+        // Glow (same shader for both)
         private int _glowVao;
-        private float _glowRadiusPx = AppConfig.GlowBaseRadiusPx;            // радиус ореола в пикселях
-        private Vec3 _glowColor = AppConfig.GlowColor;
+        private float _glowRadiusPx = AppConfig.GlowBaseRadiusPx;
         private Shader _glowShader = null!;
 
         // FPS camera
@@ -53,7 +53,7 @@ namespace PrototypeGraphicsCore
         private float _mouseSensitivity = AppConfig.MouseSensitivity;
         private float _fov = AppConfig.FovDeg;
 
-        //fps counter
+        // fps counter
         private double _fpsTime;
         private int _fpsFrames;
         private double _fpsValue;
@@ -68,23 +68,21 @@ namespace PrototypeGraphicsCore
             int size = 2 * o + 1;
             _depthBlock = new float[size * size];
 
-            // --- Debug info ---
             Console.WriteLine("OpenGL: " + GL.GetString(StringName.Version));
             Console.WriteLine("GLSL:   " + GL.GetString(StringName.ShadingLanguageVersion));
             Console.WriteLine("Vendor: " + GL.GetString(StringName.Vendor));
             Console.WriteLine("GPU:    " + GL.GetString(StringName.Renderer));
 
-            // --- GL state ---
             GL.Enable(EnableCap.DepthTest);
             GL.DepthFunc(DepthFunction.Less);
             GL.ClearColor(AppConfig.ClearColor.X, AppConfig.ClearColor.Y, AppConfig.ClearColor.Z, 1.0f);
 
-            // --- Shaders ---
+            // Shaders
             _shader = Shader.FromFiles(AppConfig.PhongVert, AppConfig.PhongFrag);
             _lampShader = Shader.FromFiles(AppConfig.LampVert, AppConfig.LampFrag);
             _glowShader = Shader.FromFiles(AppConfig.GlowVert, AppConfig.GlowFrag);
 
-            // --- Meshes (scene primitives) ---
+            // Meshes
             _cube = PrototypeGraphicsCore.Primitives.CreateCube();
             _pyramid = PrototypeGraphicsCore.Primitives.CreatePyramid();
             _sphere = PrototypeGraphicsCore.Primitives.CreateSphere(
@@ -98,22 +96,22 @@ namespace PrototypeGraphicsCore
                 minorSegments: AppConfig.TorusMinorSegments
             );
 
-            // Lamp mesh (small sphere)
             _lampMesh = PrototypeGraphicsCore.Primitives.CreateSphere(
                 stacks: AppConfig.LampSphereStacks,
                 slices: AppConfig.LampSphereSlices
             );
 
-            // Glow pass uses gl_VertexID -> only VAO needed
             _glowVao = GL.GenVertexArray();
 
-            // --- Build scene objects around the light ---
+            // Initial lights (t=0)
+            UpdateLights();
+
+            // Build scene objects (initially around barycenter)
             float radius = AppConfig.ObjectsCircleRadius;
 
             var meshes = new[] { _cube, _sphere, _pyramid, _torus };
-
-            // Safety: config arrays must match object count
             int n = meshes.Length;
+
             if (AppConfig.ObjectColors.Length != n ||
                 AppConfig.ObjectScales.Length != n ||
                 AppConfig.ObjectSpinEnabled.Length != n ||
@@ -125,10 +123,12 @@ namespace PrototypeGraphicsCore
 
             _objects.Clear();
 
+            Vec3 bary = ComputeBarycenter(_lightPos0, _lightPos1);
+
             for (int i = 0; i < n; i++)
             {
                 float angle = TwoPi * (i / (float)n);
-                Vec3 pos = _lightPos + new Vec3(MathF.Cos(angle) * radius, 0.0f, MathF.Sin(angle) * radius);
+                Vec3 pos = bary + new Vec3(MathF.Cos(angle) * radius, 0.0f, MathF.Sin(angle) * radius);
 
                 _objects.Add(new SceneObject
                 {
@@ -142,10 +142,8 @@ namespace PrototypeGraphicsCore
                 });
             }
 
-            // --- Input / camera ---
             CursorState = CursorState.Grabbed;
 
-            // Ensures _cameraFront/_cameraUp are consistent at start
             UpdateCameraVectors();
             UpdateProjection();
         }
@@ -164,48 +162,42 @@ namespace PrototypeGraphicsCore
             if (KeyboardState.IsKeyDown(Keys.Escape))
                 Close();
 
-            _time += (float)args.Time;
-
             float dt = (float)args.Time;
-            float speed = _moveSpeed * dt;
+            _time += dt;
 
+            // --- Update lights + object orbits ---
+            UpdateLights();
+            UpdateObjectsOrbit();
+
+            // --- Camera movement ---
+            float speed = _moveSpeed * dt;
             if (KeyboardState.IsKeyDown(Keys.LeftShift))
                 speed *= AppConfig.SprintMultiplier;
 
-            // FPS-forward: игнорируем pitch по Y, ходим по земле (XZ)
+            // ground movement (XZ)
             Vec3 forward = new Vec3(_cameraFront.X, 0f, _cameraFront.Z);
-            if (forward.LengthSquared > 1e-8f)
-                forward = forward.Normalized();
-            else
-                forward = -Vec3.UnitZ;
+            if (forward.LengthSquared > 1e-8f) forward = forward.Normalized();
+            else forward = -Vec3.UnitZ;
 
             Vec3 right = Vec3.Cross(forward, _worldUp).Normalized();
 
-            if (KeyboardState.IsKeyDown(Keys.W))
-                _cameraPos += forward * speed;
-            if (KeyboardState.IsKeyDown(Keys.S))
-                _cameraPos -= forward * speed;
-            if (KeyboardState.IsKeyDown(Keys.A))
-                _cameraPos -= right * speed;
-            if (KeyboardState.IsKeyDown(Keys.D))
-                _cameraPos += right * speed;
+            if (KeyboardState.IsKeyDown(Keys.W)) _cameraPos += forward * speed;
+            if (KeyboardState.IsKeyDown(Keys.S)) _cameraPos -= forward * speed;
+            if (KeyboardState.IsKeyDown(Keys.A)) _cameraPos -= right * speed;
+            if (KeyboardState.IsKeyDown(Keys.D)) _cameraPos += right * speed;
 
-            // (опционально) свободный полёт вверх/вниз:
-            if (KeyboardState.IsKeyDown(Keys.Space))
-                _cameraPos += _worldUp * speed;
-            if (KeyboardState.IsKeyDown(Keys.LeftControl))
-                _cameraPos -= _worldUp * speed;
+            // optional fly up/down
+            if (KeyboardState.IsKeyDown(Keys.Space)) _cameraPos += _worldUp * speed;
+            if (KeyboardState.IsKeyDown(Keys.LeftControl)) _cameraPos -= _worldUp * speed;
         }
 
         protected override void OnMouseMove(MouseMoveEventArgs e)
         {
             base.OnMouseMove(e);
 
-            if (CursorState != CursorState.Grabbed)
-                return;
+            if (CursorState != CursorState.Grabbed) return;
 
-            // В Grabbed-режиме правильнее использовать относительное движение мыши
-            var d = e.Delta; // OpenTK.Mathematics.Vector2
+            var d = e.Delta; // OpenTK vector2
 
             _yaw -= d.X * _mouseSensitivity;
             _pitch -= d.Y * _mouseSensitivity;
@@ -232,26 +224,36 @@ namespace PrototypeGraphicsCore
 
             var view = BuildView();
 
+            // --- Phong shader uniforms ---
             _shader.Use();
             _shader.SetMatrix4(ShaderNames.Phong.View, view);
             _shader.SetMatrix4(ShaderNames.Phong.Projection, _projection);
-            _shader.SetVector3(ShaderNames.Phong.LightPos, _lightPos);
-            _shader.SetVector3(ShaderNames.Phong.LightColor, AppConfig.LightColor);
+
+            // two lights (arrays)
+            _shader.SetVector3(ShaderNames.Phong.LightPos0, _lightPos0);
+            _shader.SetVector3(ShaderNames.Phong.LightPos1, _lightPos1);
+
+            _shader.SetVector3(ShaderNames.Phong.LightColor0, AppConfig.Light0Color * AppConfig.LightIntensity0);
+            _shader.SetVector3(ShaderNames.Phong.LightColor1, AppConfig.Light1Color * AppConfig.LightIntensity1);
+
             _shader.SetVector3(ShaderNames.Phong.ViewPos, _cameraPos);
 
+            // barycenter for facing/orbit
+            Vec3 bary = ComputeBarycenter(_lightPos0, _lightPos1);
+
+            // --- Draw scene objects ---
             for (int i = 0; i < _objects.Count; i++)
             {
                 var obj = _objects[i];
 
-                Vec3 toLight = (_lightPos - obj.BasePosition);
-                float yawToCenter = MathF.Atan2(toLight.X, toLight.Z);
+                Vec3 toCenter = (bary - obj.BasePosition);
+                float yawToCenter = MathF.Atan2(toCenter.X, toCenter.Z);
 
                 var spin =
                     obj.SpinEnabled
-                    ? Mat4.CreateFromAxisAngle(obj.SpinAxis.Normalized(), _time * obj.SpinSpeed)
-                    : Mat4.Identity;
+                        ? Mat4.CreateFromAxisAngle(obj.SpinAxis.Normalized(), _time * obj.SpinSpeed)
+                        : Mat4.Identity;
 
-                // Column-vector convention: M = T * R * Spin * S
                 var model =
                     Mat4.CreateTranslation(obj.BasePosition) *
                     Mat4.CreateRotationY(yawToCenter) *
@@ -265,50 +267,60 @@ namespace PrototypeGraphicsCore
                 obj.Mesh.Draw();
             }
 
-            // Lamp
+            // --- Lamps (2x) ---
             _lampShader.Use();
             _lampShader.SetMatrix4(ShaderNames.Lamp.View, view);
             _lampShader.SetMatrix4(ShaderNames.Lamp.Projection, _projection);
 
-            // 0) core (непрозрачная "лампочка")
+            DrawLampAt(_lightPos0, AppConfig.Light0Color, AppConfig.LightIntensity0);
+            DrawLampAt(_lightPos1, AppConfig.Light1Color, AppConfig.LightIntensity1);
+
+            // --- Glow (2x) ---
+            DrawGlow(view, _lightPos0, AppConfig.Light0Color);
+            DrawGlow(view, _lightPos1, AppConfig.Light1Color);
+
+            SwapBuffers();
+            ShowFPS(args);
+        }
+
+        private void DrawLampAt(in Vec3 pos, in Vec3 lightColor, float intensity)
+        {
+            // Core: opaque
             GL.Disable(EnableCap.Blend);
             GL.DepthMask(true);
 
+            Vec3 coreColor = Mul(lightColor, AppConfig.LampCoreColor) * intensity;
+
             {
-                var core = Mat4.CreateTranslation(_lightPos) * Mat4.CreateScale(_lampCoreRadius);
+                var core = Mat4.CreateTranslation(pos) * Mat4.CreateScale(_lampCoreRadius);
                 _lampShader.SetMatrix4(ShaderNames.Lamp.Model, core);
-                _lampShader.SetVector3(ShaderNames.Lamp.Color, _lampCoreColor);
+                _lampShader.SetVector3(ShaderNames.Lamp.Color, coreColor);
                 _lampShader.SetFloat(ShaderNames.Lamp.Alpha, AppConfig.LampAlpha);
                 _lampMesh.Draw();
             }
 
-            // 1..3) halo shells (аддитивные оболочки)
+            // Halos: additive shells
             GL.Enable(EnableCap.Blend);
             GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.One);
             GL.DepthMask(false);
 
-            // ореол
             for (int i = 0; i < AppConfig.LampHaloScales.Length; i++)
             {
                 float scale = AppConfig.LampHaloScales[i];
-                Vec3 color = AppConfig.LampHaloColors[i];
+                Vec3 baseHalo = AppConfig.LampHaloColors[i];
                 float alpha = AppConfig.LampHaloAlphas[i];
 
-                var m = Mat4.CreateTranslation(_lightPos) * Mat4.CreateScale(_lampHaloRadius * scale);
+                Vec3 haloColor = Mul(baseHalo, lightColor) * intensity;
+
+                var m = Mat4.CreateTranslation(pos) * Mat4.CreateScale(_lampHaloRadius * scale);
                 _lampShader.SetMatrix4(ShaderNames.Lamp.Model, m);
-                _lampShader.SetVector3(ShaderNames.Lamp.Color, color);
+                _lampShader.SetVector3(ShaderNames.Lamp.Color, haloColor);
                 _lampShader.SetFloat(ShaderNames.Lamp.Alpha, alpha);
                 _lampMesh.Draw();
             }
 
             GL.DepthMask(true);
             GL.Disable(EnableCap.Blend);
-
-            DrawGlow(view);
-
-            SwapBuffers();
-
-            ShowFPS(args);
         }
 
         private void ShowFPS(FrameEventArgs args)
@@ -316,26 +328,83 @@ namespace PrototypeGraphicsCore
             _fpsTime += args.Time;
             _fpsFrames++;
 
-            if (_fpsTime >= 0.5) // обновлять 2 раза в секунду
+            if (_fpsTime >= 0.5)
             {
                 _fpsValue = _fpsFrames / _fpsTime;
-
                 Title = $"{AppConfig.Title} | FPS: {_fpsValue:0.0}";
-
                 _fpsTime = 0.0;
                 _fpsFrames = 0;
             }
         }
+
+        private void UpdateLights()
+        {
+            // phi=0 => cos=+1, sin=0
+            // Мы хотим при t=0:
+            //   light0 в a1 => x = -RxA => angle = PI
+            //   light1 в b2 => x = +RxB => angle = 0
+            // => light0: phi + PI, light1: phi
+            float phi = _time * AppConfig.LightsAngularSpeed + AppConfig.LightsStartPhase;
+
+            float a0 = phi + MathF.PI; // for a1 at start
+            float a1 = phi;            // for b2 at start
+
+            _lightPos0 = AppConfig.EllipseACenter + new Vec3(
+                MathF.Cos(a0) * AppConfig.EllipseARadiusX,
+                0f,
+                MathF.Sin(a0) * AppConfig.EllipseARadiusZ
+            );
+
+            _lightPos1 = AppConfig.EllipseBCenter + new Vec3(
+                MathF.Cos(a1) * AppConfig.EllipseBRadiusX,
+                0f,
+                MathF.Sin(a1) * AppConfig.EllipseBRadiusZ
+            );
+        }
+
+        private void UpdateObjectsOrbit()
+        {
+            Vec3 bary = ComputeBarycenter(_lightPos0, _lightPos1);
+
+            float radius = AppConfig.ObjectsCircleRadius;
+            float w = AppConfig.ObjectsOrbitSpeed;
+
+            // равномерное распределение фаз по индексам
+            int n = _objects.Count;
+            for (int i = 0; i < n; i++)
+            {
+                float basePhase = TwoPi * (i / (float)n);
+                float angle = basePhase + _time * w;
+
+                _objects[i].BasePosition = bary + new Vec3(
+                    MathF.Cos(angle) * radius,
+                    0f,
+                    MathF.Sin(angle) * radius
+                );
+            }
+        }
+
+        private static Vec3 ComputeBarycenter(in Vec3 p0, in Vec3 p1)
+        {
+            float m0 = AppConfig.LightMass0;
+            float m1 = AppConfig.LightMass1;
+            float denom = m0 + m1;
+
+            if (denom < 1e-6f) return (p0 + p1) * 0.5f;
+
+            return (p0 * m0 + p1 * m1) / denom;
+        }
+
+        private static Vec3 Mul(in Vec3 a, in Vec3 b)
+            => new Vec3(a.X * b.X, a.Y * b.Y, a.Z * b.Z);
 
         private void UpdateCameraVectors()
         {
             float yawRad = DegreesToRadians(_yaw);
             float pitchRad = DegreesToRadians(_pitch);
 
-            // Берём базовое "вперёд" как -Z (как в OpenGL)
             Vec4 forward0 = new Vec4(0f, 0f, -1f, 0f);
 
-            // Камерный поворот: yaw вокруг Y, затем pitch вокруг X
             Mat4 rotY = Mat4.CreateRotationY(yawRad);
             Mat4 rotX = Mat4.CreateRotationX(pitchRad);
 
@@ -361,7 +430,6 @@ namespace PrototypeGraphicsCore
             float yaw = DegreesToRadians(_yaw);
             float pitch = DegreesToRadians(_pitch);
 
-            // View = R^-1 * T^-1  ->  Rx(-pitch) * Ry(-yaw) * T(-pos)
             Mat4 rotX = Mat4.CreateRotationX(-pitch);
             Mat4 rotY = Mat4.CreateRotationY(-yaw);
             Mat4 trans = Mat4.CreateTranslation(-_cameraPos);
@@ -377,7 +445,6 @@ namespace PrototypeGraphicsCore
             _sphere?.Dispose();
             _pyramid?.Dispose();
             _torus?.Dispose();
-
             _shader?.Dispose();
 
             _lampMesh?.Dispose();
@@ -387,10 +454,11 @@ namespace PrototypeGraphicsCore
             _glowShader?.Dispose();
         }
 
-        private void DrawGlow(in Mat4 view)
+        // ----- Glow (per-light) -----
+
+        private void DrawGlow(in Mat4 view, in Vec3 lightPos, in Vec3 lightColor)
         {
-            // --- 1) Project light to screen ---
-            Vec4 clip = _projection * (view * new Vec4(_lightPos, 1.0f));
+            Vec4 clip = _projection * (view * new Vec4(lightPos, 1.0f));
             if (clip.W <= 1e-4f) return;
 
             Vec3 ndc = clip.Xyz / clip.W;
@@ -403,12 +471,10 @@ namespace PrototypeGraphicsCore
 
             float lightDepth01 = ndc.Z * 0.5f + 0.5f;
 
-            // --- 2) Soft occlusion (5 depth taps) ---
             float vis = ComputeGlowVisibilityBlock(px, py, lightDepth01);
             if (vis <= AppConfig.GlowVisibleThreshold) return;
 
-            // --- 3) Distance-based radius & intensity ---
-            Vec4 lightView = view * new Vec4(_lightPos, 1.0f);
+            Vec4 lightView = view * new Vec4(lightPos, 1.0f);
             float viewZ = MathF.Max(AppConfig.GlowMinViewZ, -lightView.Z);
 
             float radiusPx = _glowRadiusPx / (AppConfig.GlowRadiusA + AppConfig.GlowRadiusB * viewZ);
@@ -417,11 +483,12 @@ namespace PrototypeGraphicsCore
             float intensity = AppConfig.GlowBaseIntensity / (AppConfig.GlowIntensityC + AppConfig.GlowIntensityD * viewZ);
             intensity = Clamp(intensity, AppConfig.GlowMinIntensity, AppConfig.GlowMaxIntensity) * vis;
 
-            // --- 4) Draw fullscreen tri glow ---
-            RenderGlowOverlay(px, py, radiusPx, intensity);
+            Vec3 glowColor = Mul(AppConfig.GlowColor, lightColor);
+
+            RenderGlowOverlay(px, py, radiusPx, intensity, glowColor);
         }
 
-        private void RenderGlowOverlay(float px, float py, float radiusPx, float intensity)
+        private void RenderGlowOverlay(float px, float py, float radiusPx, float intensity, in Vec3 color)
         {
             GL.Disable(EnableCap.DepthTest);
             GL.DepthMask(false);
@@ -432,7 +499,7 @@ namespace PrototypeGraphicsCore
             _glowShader.Use();
             _glowShader.SetVector2(ShaderNames.Glow.LightScreenPx, new Vec2(px, py));
             _glowShader.SetFloat(ShaderNames.Glow.RadiusPx, radiusPx);
-            _glowShader.SetVector3(ShaderNames.Glow.Color, _glowColor);
+            _glowShader.SetVector3(ShaderNames.Glow.Color, color);
             _glowShader.SetFloat(ShaderNames.Glow.Intensity, intensity);
 
             GL.BindVertexArray(_glowVao);
@@ -450,11 +517,9 @@ namespace PrototypeGraphicsCore
             float eps = AppConfig.GlowDepthEps;
             int o = AppConfig.GlowSampleOffsetPx;
 
-            // целевые пиксели
             int ix = (int)Clamp(px, 0, Size.X - 1);
             int iy = (int)Clamp(py, 0, Size.Y - 1);
 
-            // блок чтения вокруг центра (clamp к экрану)
             int x0 = (int)Clamp(ix - o, 0, Size.X - 1);
             int y0 = (int)Clamp(iy - o, 0, Size.Y - 1);
             int x1 = (int)Clamp(ix + o, 0, Size.X - 1);
@@ -463,21 +528,18 @@ namespace PrototypeGraphicsCore
             int w = x1 - x0 + 1;
             int h = y1 - y0 + 1;
 
-            // один вызов ReadPixels
             GL.ReadPixels(x0, y0, w, h, PixelFormat.DepthComponent, PixelType.Float, _depthBlock);
 
             float Sample(int sx, int sy)
             {
-                // на случай, если точка ушла за границы блока
                 sx = (int)Clamp(sx, x0, x1);
                 sy = (int)Clamp(sy, y0, y1);
 
                 int lx = sx - x0;
                 int ly = sy - y0;
-                return _depthBlock[ly * w + lx]; // stride = w (фактическая ширина блока)
+                return _depthBlock[ly * w + lx];
             }
 
-            // 5 сэмплов: центр, вправо, влево, вверх, вниз
             float vis = 0f;
 
             float d0 = Sample(ix, iy);
@@ -495,7 +557,7 @@ namespace PrototypeGraphicsCore
             float d4 = Sample(ix, iy - o);
             if (lightDepth01 <= d4 + eps) vis += 1f;
 
-            return vis * 0.2f; // /5
+            return vis * 0.2f;
         }
     }
 }

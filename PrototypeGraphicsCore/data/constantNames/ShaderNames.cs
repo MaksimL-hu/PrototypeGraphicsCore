@@ -7,14 +7,16 @@
             public const string Model = "uModel";
             public const string View = "uView";
             public const string Projection = "uProjection";
-
             public const string ObjectColor = "uObjectColor";
-            public const string LightPos = "uLightPos";
-            public const string LightColor = "uLightColor";
-
-            public const string ViewPos = "uViewPos";
             public const string Shininess = "uShininess";
+            public const string ViewPos = "uViewPos";
+
+            public const string LightPos0 = "uLightPos[0]";
+            public const string LightPos1 = "uLightPos[1]";
+            public const string LightColor0 = "uLightColor[0]";
+            public const string LightColor1 = "uLightColor[1]";
         }
+
 
         public static class Lamp
         {

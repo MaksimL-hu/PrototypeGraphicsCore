@@ -51,7 +51,7 @@ namespace Config
 
         // Scene
         public static readonly Vec3 ClearColor = new Vec3(0.07f, 0.08f, 0.10f);
-        public const float ObjectsCircleRadius = 3.2f;
+        public const float ObjectsCircleRadius = 10f;
 
         // Light
         public static readonly Vec3 LightPos = new Vec3(0f, 2.0f, 0f);
@@ -62,6 +62,33 @@ namespace Config
         public static readonly Vec3 LampCoreColor = new Vec3(1.0f, 0.98f, 0.85f);
         public const float LampHaloRadius = 0.28f;
         public const float LampAlpha = 1f;
+
+        // Two-light ellipses
+        public static readonly Vec3 EllipseACenter = new Vec3(-5f, 2.0f, 0f);
+        public static readonly Vec3 EllipseBCenter = new Vec3(0f, 2.0f, 0f);
+
+        public const float EllipseARadiusX = 2.4f;
+        public const float EllipseARadiusZ = 1.35f;
+
+        public const float EllipseBRadiusX = 5.2f;
+        public const float EllipseBRadiusZ = 1.85f;
+
+        public const float LightsAngularSpeed = 0.65f;
+        public const float LightsStartPhase = 0.0f; // t=0: light0=a1, light1=b2
+
+        public static readonly Vec3 Light0Color = new Vec3(1.00f, 0.95f, 0.85f);
+        public static readonly Vec3 Light1Color = new Vec3(0.65f, 0.80f, 1.00f);
+
+        public const float LightIntensity0 = 1.0f;
+        public const float LightIntensity1 = 1.0f;
+
+        // Masses for barycenter
+        public const float LightMass0 = 2.0f;
+        public const float LightMass1 = 1.0f;
+
+        // Objects orbit around barycenter
+        public const float ObjectsOrbitSpeed = 0.55f;
+
 
         // ---------- Lamp halo layers ----------
         public static readonly float[] LampHaloScales = { 1.00f, 1.75f, 2.60f };
