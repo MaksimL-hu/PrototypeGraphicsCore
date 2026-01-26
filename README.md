@@ -4,7 +4,7 @@ A 3D learning project in **C# + OpenTK (OpenGL 3.3)**: primitives (**cube / sphe
 The scene’s math is custom (**MyMath**), with self-written mathematics for 3D graphics.
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="Screenshot" width="800" />
+  <img src="docs/gif.gif" alt="PrototypeGraphicsCore demo" />
 </p>
 
 <p align="center">
