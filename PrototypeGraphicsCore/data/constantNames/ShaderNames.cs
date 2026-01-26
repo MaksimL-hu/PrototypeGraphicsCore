@@ -17,7 +17,6 @@
             public const string LightColor1 = "uLightColor[1]";
         }
 
-
         public static class Lamp
         {
             public const string Model = "uModel";
@@ -34,6 +33,14 @@
             public const string RadiusPx = "uRadiusPx";
             public const string Color = "uColor";
             public const string Intensity = "uIntensity";
+        }
+
+        public static class Trace
+        {
+            public const string View = "uView";
+            public const string Projection = "uProjection";
+            public const string Color = "uColor";
+            public const string Alpha = "uAlpha";
         }
     }
 }

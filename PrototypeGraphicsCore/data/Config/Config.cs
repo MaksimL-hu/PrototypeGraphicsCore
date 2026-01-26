@@ -148,6 +148,25 @@ namespace Config
         public static readonly Vec3[] ObjectSpinAxis = { Vec3.UnitY, Vec3.UnitY, Vec3.UnitY, Vec3.UnitX };
         public static readonly float[] ObjectSpinSpeed = { 1.0f, 0.0f, 0.8f, 1.6f };
 
+        // Tracers
+        public const bool TraceShowOrbits = true;   // рисовать эллипсы
+        public const bool TraceShowTrails = true;   // рисовать хвосты
+        public const int TraceEllipseSegments = 256;
+
+        public const int TraceTrailMaxPoints = 180;
+        public const float TraceTrailSampleStep = 0.03f; // раз в N секунд добавляем точку
+
+        public const float TraceLineWidth = 2.0f;
+
+        public const float TraceOrbitAlpha = 0.25f;
+        public const float TraceTrailAlpha = 0.85f;
+
+        public static readonly Vec3 TraceOrbitColor0 = new Vec3(1.0f, 0.55f, 0.25f);
+        public static readonly Vec3 TraceOrbitColor1 = new Vec3(0.25f, 0.65f, 1.0f);
+
+        public static readonly Vec3 TraceTrailColor0 = new Vec3(1.0f, 0.75f, 0.45f);
+        public static readonly Vec3 TraceTrailColor1 = new Vec3(0.45f, 0.75f, 1.0f);
+
         // Shaders root
         public const string ShadersDir = "data/shaders";
 
@@ -160,5 +179,9 @@ namespace Config
 
         public static readonly string GlowVert = $"{ShadersDir}/glow.vert";
         public static readonly string GlowFrag = $"{ShadersDir}/glow.frag";
+
+        // Trace shaders
+        public static readonly string TraceVert = $"{ShadersDir}/trace.vert";
+        public static readonly string TraceFrag = $"{ShadersDir}/trace.frag";
     }
 }

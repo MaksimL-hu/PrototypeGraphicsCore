@@ -40,6 +40,21 @@ namespace PrototypeGraphicsCore
         private float _glowRadiusPx = AppConfig.GlowBaseRadiusPx;
         private Shader _glowShader = null!;
 
+        // Trace
+        private Shader _traceShader = null!;
+        private LineMesh _orbitA = null!;
+        private LineMesh _orbitB = null!;
+        private LineMesh _trail0 = null!;
+        private LineMesh _trail1 = null!;
+
+        private Vec3[] _trailPos0 = null!;
+        private Vec3[] _trailPos1 = null!;
+        private float[] _trailBuf0 = null!;
+        private float[] _trailBuf1 = null!;
+        private int _trailWrite0, _trailCount0;
+        private int _trailWrite1, _trailCount1;
+        private float _trailAcc;
+
         // FPS camera
         private Vec3 _worldUp = Vec3.UnitY;
         private Vec3 _cameraFront = -Vec3.UnitZ;
@@ -102,6 +117,25 @@ namespace PrototypeGraphicsCore
             );
 
             _glowVao = GL.GenVertexArray();
+
+            _traceShader = Shader.FromFiles(AppConfig.TraceVert, AppConfig.TraceFrag);
+
+            _orbitA = CreateEllipseLineMesh(AppConfig.EllipseACenter, AppConfig.EllipseARadiusX, AppConfig.EllipseARadiusZ, AppConfig.TraceEllipseSegments);
+            _orbitB = CreateEllipseLineMesh(AppConfig.EllipseBCenter, AppConfig.EllipseBRadiusX, AppConfig.EllipseBRadiusZ, AppConfig.TraceEllipseSegments);
+
+            _trail0 = new LineMesh(AppConfig.TraceTrailMaxPoints);
+            _trail1 = new LineMesh(AppConfig.TraceTrailMaxPoints);
+
+            _trailPos0 = new Vec3[AppConfig.TraceTrailMaxPoints];
+            _trailPos1 = new Vec3[AppConfig.TraceTrailMaxPoints];
+            _trailBuf0 = new float[AppConfig.TraceTrailMaxPoints * 4];
+            _trailBuf1 = new float[AppConfig.TraceTrailMaxPoints * 4];
+
+            // стартовые точки хвоста
+            PushTrail(ref _trailWrite0, ref _trailCount0, _trailPos0, _lightPos0);
+            PushTrail(ref _trailWrite1, ref _trailCount1, _trailPos1, _lightPos1);
+            UploadTrailMeshes();
+
 
             // Initial lights (t=0)
             UpdateLights();
@@ -167,6 +201,7 @@ namespace PrototypeGraphicsCore
 
             // --- Update lights + object orbits ---
             UpdateLights();
+            UpdateTracers((float)args.Time);
             UpdateObjectsOrbit();
 
             // --- Camera movement ---
@@ -266,6 +301,8 @@ namespace PrototypeGraphicsCore
 
                 obj.Mesh.Draw();
             }
+
+            DrawTracers(view);
 
             // --- Lamps (2x) ---
             _lampShader.Use();
@@ -452,6 +489,12 @@ namespace PrototypeGraphicsCore
 
             if (_glowVao != 0) GL.DeleteVertexArray(_glowVao);
             _glowShader?.Dispose();
+
+            _orbitA?.Dispose();
+            _orbitB?.Dispose();
+            _trail0?.Dispose();
+            _trail1?.Dispose();
+            _traceShader?.Dispose();
         }
 
         // ----- Glow (per-light) -----
@@ -558,6 +601,143 @@ namespace PrototypeGraphicsCore
             if (lightDepth01 <= d4 + eps) vis += 1f;
 
             return vis * 0.2f;
+        }
+
+        private LineMesh CreateEllipseLineMesh(in Vec3 center, float rx, float rz, int segments)
+        {
+            segments = Math.Max(8, segments);
+
+            // xyz + age(=1) => 4 float на вершину
+            float[] data = new float[segments * 4];
+
+            for (int i = 0; i < segments; i++)
+            {
+                float t = TwoPi * (i / (float)segments);
+                float x = center.X + MathF.Cos(t) * rx;
+                float y = center.Y;
+                float z = center.Z + MathF.Sin(t) * rz;
+
+                int k = i * 4;
+                data[k + 0] = x;
+                data[k + 1] = y;
+                data[k + 2] = z;
+                data[k + 3] = 1f; // age
+            }
+
+            var m = new LineMesh(segments, BufferUsageHint.StaticDraw);
+            m.SetData(data, segments);
+            return m;
+        }
+
+        private void UpdateTracers(float dt)
+        {
+            if (!AppConfig.TraceShowTrails) return;
+
+            _trailAcc += dt;
+            float step = AppConfig.TraceTrailSampleStep;
+
+            while (_trailAcc >= step)
+            {
+                _trailAcc -= step;
+
+                PushTrail(ref _trailWrite0, ref _trailCount0, _trailPos0, _lightPos0);
+                PushTrail(ref _trailWrite1, ref _trailCount1, _trailPos1, _lightPos1);
+            }
+
+            UploadTrailMeshes();
+        }
+
+        private static void PushTrail(ref int write, ref int count, Vec3[] ring, in Vec3 p)
+        {
+            int cap = ring.Length;
+            ring[write] = p;
+            write = (write + 1) % cap;
+            if (count < cap) count++;
+        }
+
+        private void UploadTrailMeshes()
+        {
+            FillTrailBuffer(_trailPos0, _trailWrite0, _trailCount0, _trailBuf0);
+            FillTrailBuffer(_trailPos1, _trailWrite1, _trailCount1, _trailBuf1);
+
+            _trail0.SetData(_trailBuf0, _trailCount0);
+            _trail1.SetData(_trailBuf1, _trailCount1);
+        }
+
+        private static void FillTrailBuffer(Vec3[] ring, int write, int count, float[] outBuf)
+        {
+            // write указывает на "следующую позицию для записи"
+            // oldest = write - count
+            int cap = ring.Length;
+            if (count <= 0) return;
+
+            int oldest = write - count;
+            while (oldest < 0) oldest += cap;
+
+            for (int i = 0; i < count; i++)
+            {
+                int idx = (oldest + i) % cap;
+                Vec3 p = ring[idx];
+
+                float age = (count <= 1) ? 1f : (i / (float)(count - 1)); // 0..1
+                                                                          // хотим: старое = 0 (почти прозрачно), новое = 1 (ярко)
+
+                int k = i * 4;
+                outBuf[k + 0] = p.X;
+                outBuf[k + 1] = p.Y;
+                outBuf[k + 2] = p.Z;
+                outBuf[k + 3] = age;
+            }
+        }
+
+        private void DrawTracers(in Mat4 view)
+        {
+            bool drawOrbits = AppConfig.TraceShowOrbits;
+            bool drawTrails = AppConfig.TraceShowTrails;
+
+            if (!drawOrbits && !drawTrails) return;
+
+            GL.LineWidth(AppConfig.TraceLineWidth);
+
+            // Рисуем после геометрии: depth test оставляем ВКЛ (трейсеры будут окклюдиться объектами)
+            GL.DepthMask(false);
+
+            GL.Enable(EnableCap.Blend);
+
+            _traceShader.Use();
+            _traceShader.SetMatrix4(ShaderNames.Trace.View, view);
+            _traceShader.SetMatrix4(ShaderNames.Trace.Projection, _projection);
+
+            if (drawOrbits)
+            {
+                // обычная прозрачность (не аддитив)
+                GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+
+                _traceShader.SetFloat(ShaderNames.Trace.Alpha, AppConfig.TraceOrbitAlpha);
+
+                _traceShader.SetVector3(ShaderNames.Trace.Color, AppConfig.TraceOrbitColor0);
+                _orbitA.Draw(PrimitiveType.LineLoop);
+
+                _traceShader.SetVector3(ShaderNames.Trace.Color, AppConfig.TraceOrbitColor1);
+                _orbitB.Draw(PrimitiveType.LineLoop);
+            }
+
+            if (drawTrails)
+            {
+                // хвост красивее в аддитивном режиме
+                GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.One);
+
+                _traceShader.SetFloat(ShaderNames.Trace.Alpha, AppConfig.TraceTrailAlpha);
+
+                _traceShader.SetVector3(ShaderNames.Trace.Color, AppConfig.TraceTrailColor0);
+                _trail0.Draw(PrimitiveType.LineStrip);
+
+                _traceShader.SetVector3(ShaderNames.Trace.Color, AppConfig.TraceTrailColor1);
+                _trail1.Draw(PrimitiveType.LineStrip);
+            }
+
+            GL.Disable(EnableCap.Blend);
+            GL.DepthMask(true);
         }
     }
 }
